@@ -1,0 +1,22 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/isbozeng/Downloads/wwl_code_test/myList/test/myList.h
+iostream
+-
+string
+-
+sstream
+-
+
+/home/isbozeng/Downloads/wwl_code_test/myList/test/myListTest.cpp
+gtest/gtest.h
+-
+myList.h
+/home/isbozeng/Downloads/wwl_code_test/myList/test/myList.h
+
