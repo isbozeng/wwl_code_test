@@ -1,0 +1,1 @@
+/usr/bin/cc   -rdynamic CMakeFiles/mykcm_app.dir/client.c.o CMakeFiles/mykcm_app.dir/shm_rwlock.c.o  -o mykcm_app  -lrt -lpthread 

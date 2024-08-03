@@ -1,0 +1,1 @@
+cmd_/home/isbozeng/Downloads/wwl_code_test/kcm/mykcm.ko := ld -r -m elf_x86_64  -z max-page-size=0x200000  --build-id  -T ./scripts/module-common.lds -o /home/isbozeng/Downloads/wwl_code_test/kcm/mykcm.ko /home/isbozeng/Downloads/wwl_code_test/kcm/mykcm.o /home/isbozeng/Downloads/wwl_code_test/kcm/mykcm.mod.o;  true
