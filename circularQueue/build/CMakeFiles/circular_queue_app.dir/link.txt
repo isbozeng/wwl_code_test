@@ -1,0 +1,1 @@
+/usr/bin/cc    CMakeFiles/circular_queue_app.dir/main.c.o CMakeFiles/circular_queue_app.dir/circular_queue.c.o  -o circular_queue_app  -lpthread 
