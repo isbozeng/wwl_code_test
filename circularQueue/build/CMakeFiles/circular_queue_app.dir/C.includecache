@@ -6,20 +6,6 @@
 
 #IncludeRegexTransform: 
 
-/home/isbozeng/Downloads/wwl_code_test/circularQueue/circular_queue.c
-stdio.h
--
-stdlib.h
--
-stdatomic.h
--
-stdbool.h
--
-pthread.h
--
-circular_queue.h
-/home/isbozeng/Downloads/wwl_code_test/circularQueue/circular_queue.h
-
 /home/isbozeng/Downloads/wwl_code_test/circularQueue/circular_queue.h
 stdio.h
 -
@@ -42,6 +28,8 @@ pthread.h
 unistd.h
 -
 time.h
+-
+semaphore.h
 -
 circular_queue.h
 /home/isbozeng/Downloads/wwl_code_test/circularQueue/circular_queue.h

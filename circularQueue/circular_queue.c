@@ -44,7 +44,7 @@ void queue_destroy(CircularQueue *q) {
 // 入队操作
 int queue_enqueue(CircularQueue *q, int value) {
     if (!QUE_IS_VALID(q)) {
-        return 0;
+        return -1;
     }
 
     if (queue_is_full(q)) {
@@ -62,7 +62,7 @@ int queue_enqueue(CircularQueue *q, int value) {
 // 出队操作
 int queue_dequeue(CircularQueue *q, int *value) {
     if (!QUE_IS_VALID(q)) {
-        return 0;
+        return -1;
     }    
     if (queue_is_empty(q)) {
         return -1; // 队列空
