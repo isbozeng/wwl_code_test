@@ -17,11 +17,17 @@
 static int major;
 static char *kernel_buffer;
 static size_t buffer_size = 4096;
-static atomic_t target_pid  = ATOMIC_INIT(-1);
 static DECLARE_WAIT_QUEUE_HEAD(wait_queue);
+static struct fasync_struct *async_queue;
 static struct class *device_class = NULL; // 添加设备类的全局变量声明
 static struct device *device = NULL;
 
+
+
+static int device_fasync(int fd, struct file *filep, int mode)
+{
+    return fasync_helper(fd, filep, mode, &async_queue);
+}
 
 static int device_open(struct inode *inode, struct file *file) {
     
@@ -29,28 +35,19 @@ static int device_open(struct inode *inode, struct file *file) {
 }
 
 static int device_release(struct inode *inode, struct file *file) {
+    device_fasync(-1, file, 0);
     return 0;
 }
 
 static long device_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
     int ret = 0;
-
     switch (cmd) {
         case IOCTL_NOTIFY: {
-            int write_len = 0;
-
-            if (get_user(write_len, (int __user *)arg)) {
-                return -EFAULT; // 返回错误并退出函数
+        
+            if (async_queue) {
+                kill_fasync(&async_queue, SIGIO, POLL_IN);
             }
-		/*struct siginfo info;
-		struct kernel_siginfo kinfo;
-		memset(&info, 0, sizeof(info));
-		info.si_signo = SIGIO;
-		info.si_code = SI_KERNEL; // 用户空间发送的信号
-		info.si_pid = current->pid; // 发送信号的进程PID
-		info.si_value.sival_int = write_len;
-		memcpy(&kinfo, &info, sizeof(struct kernel_siginfo));
-               do_send_sig_info(SIGIO, &kinfo, current, 0);*/
+            break;
         }
         default:
             ret = -EINVAL;
@@ -61,20 +58,7 @@ static long device_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 }
 
 
-/*static unsigned int device_poll(struct file *file, poll_table *wait) {
-    unsigned int mask = 0;
-    pid_t current_pid = task_pid_nr(current);
 
-    poll_wait(file, &wait_queue, wait);
-
-    int target = atomic_read(&target_pid);
-    if (target != -1 && current_pid != target) {
-        mask = POLLIN;
-        atomic_set(&target_pid, -1);
-    }
-
-    return mask;
-}*/
 
 static int device_mmap(struct file *file, struct vm_area_struct *vma) {
     unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
@@ -84,9 +68,16 @@ static int device_mmap(struct file *file, struct vm_area_struct *vma) {
     if (offset + size > buffer_size)
         return -EINVAL;
 
+    // 获取 kernel_buffer 的物理地址
+    phys_addr_t phys_addr = virt_to_phys(kernel_buffer);
+
+    // 检查 phys_addr 是否有效
+    if (!phys_addr)
+        return -EINVAL;
+
     // 映射物理内存到用户空间
     if (remap_pfn_range(vma, vma->vm_start,
-                        virt_to_phys(kernel_buffer) >> PAGE_SHIFT,
+                        phys_addr >> PAGE_SHIFT,
                         size, vma->vm_page_prot)) {
         return -EAGAIN; // 映射失败时返回错误代码
     }
@@ -96,16 +87,17 @@ static int device_mmap(struct file *file, struct vm_area_struct *vma) {
 
 
 
+
 static struct file_operations fops = {
     .open = device_open,
     .release = device_release,
     .unlocked_ioctl = device_ioctl,
     .mmap = device_mmap,
- //   .poll = device_poll,
+    .fasync = device_fasync,    
 };
 
 static int __init device_init(void) {
-    int ret;
+    //int ret;
 
     // 注册字符设备
     major = register_chrdev(0, DEVICE_NAME, &fops);
@@ -121,6 +113,7 @@ static int __init device_init(void) {
         unregister_chrdev(major, DEVICE_NAME); // 释放已注册的设备
         return -ENOMEM;
     }
+    memset(kernel_buffer, 0, buffer_size);
 // 创建设备类
     device_class = class_create(THIS_MODULE, DEVICE_NAME);
     if (IS_ERR(device_class)) {
@@ -145,9 +138,6 @@ static int __init device_init(void) {
 
 
 static void __exit device_exit(void) {
-
-
-
     if (device) {
         device_destroy(device_class, MKDEV(major, 0));
     }
@@ -158,14 +148,12 @@ static void __exit device_exit(void) {
         kfree(kernel_buffer);
         kernel_buffer = NULL; // 防止再次释放
     }
-
     if (major >= 0) {
         unregister_chrdev(major, DEVICE_NAME);
     }
 
     printk(KERN_INFO "mykcm with major number %d unregistered and memory freed\n", major);
 }
-
 
 
 module_init(device_init);

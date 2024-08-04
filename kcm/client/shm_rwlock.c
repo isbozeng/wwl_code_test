@@ -1,6 +1,7 @@
 #include "shm_rwlock.h"
 
-int shm_rwlock_init(const char *name, size_t size, shared_memory_t **shm_ptr, void *buf) {
+
+int shm_rwlock_init(const char *name, size_t size, shared_memory_t **shm_ptr, void *buf, write_evt_cb_t cb) {
     int shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
     if (shm_fd == -1) {
         perror("shm_open");
@@ -38,9 +39,16 @@ int shm_rwlock_init(const char *name, size_t size, shared_memory_t **shm_ptr, vo
     pthread_rwlockattr_destroy(&attr);
 
     // 设置共享内存结构体的buf指针
+    #ifndef MY_SM_BUF_SIZE    
     (*shm_ptr)->buf = buf;
     (*shm_ptr)->buf_size = size;
-
+    #else
+    (*shm_ptr)->buf_size = sizeof((*shm_ptr)->buf);
+    memset((*shm_ptr)->buf, 0, (*shm_ptr)->buf_size);
+    #endif
+    (*shm_ptr)->last_writer_pid = -1;
+    (*shm_ptr)->last_write_size = 0;
+    (*shm_ptr)->write_evt_cb = cb; // 设置回调函数
     return SM_SUCCESS;
 }
 
@@ -89,12 +97,12 @@ int shm_rwlock_read(shared_memory_t *shm_ptr, char *buffer, size_t size) {
     return SM_SUCCESS;
 }
 
-int shm_rwlock_write(shared_memory_t *shm_ptr, const char *buffer, size_t size) {
+int shm_rwlock_write(shared_memory_t *shm_ptr, const char *buffer, size_t size, size_t cb_argc, void*cb_arg) {
     if (size > shm_ptr->buf_size) {
         fprintf(stderr, "Write size exceeds buffer size\n");
         return SM_FAILURE;
     }
-
+	//printf("shm_buf start %p, w end %p", shm_ptr->buf, &shm_ptr->buf[size]);
     // 获取写锁
     if (pthread_rwlock_wrlock(&(shm_ptr->rwlock)) != 0) {
         perror("pthread_rwlock_wrlock");
@@ -103,6 +111,13 @@ int shm_rwlock_write(shared_memory_t *shm_ptr, const char *buffer, size_t size) 
 
     memcpy(shm_ptr->buf, buffer, size);
 
+    // 更新写进程 PID 和写入大小
+    shm_ptr->last_writer_pid = getpid();
+    shm_ptr->last_write_size = size;
+    // 调用回调函数（如果已注册）
+    /*if (shm_ptr->write_evt_cb) {
+        shm_ptr->write_evt_cb(cb_argc, cb_arg);
+    }*/
     // 释放锁
     if (pthread_rwlock_unlock(&(shm_ptr->rwlock)) != 0) {
         perror("pthread_rwlock_unlock");
