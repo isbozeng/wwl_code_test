@@ -102,7 +102,11 @@ int shm_rwlock_write(shared_memory_t *shm_ptr, void *dest, const void *buffer, s
         perror("pthread_rwlock_wrlock");
         return SM_FAILURE;
     }
-
+    /*char *d = dest, *s = buffer;
+    for (int i = 0; i < size; i++) {
+       printf("&dest[%d] %p , val %c\n",i, d + i, s[i]);
+       d[i] = s[i];
+    }*/
     memcpy(dest, buffer, size);
 
     // 更新写进程 PID 和写入大小
@@ -114,11 +118,11 @@ int shm_rwlock_write(shared_memory_t *shm_ptr, void *dest, const void *buffer, s
         perror("pthread_rwlock_unlock");
         return SM_FAILURE;
     }
-    //printf("end write devmem %p, size %u\n", dest, size);
+    
     // 调用回调函数（如果已注册）
-    if (shm_ptr->write_evt_cb) {
-        shm_ptr->write_evt_cb(cb_argc, cb_arg);
-    }    
-    //printf("evt cb end\n");
+    //if (shm_ptr->write_evt_cb) {
+    //    shm_ptr->write_evt_cb(cb_argc, cb_arg);
+    //}    
+    //printf("end write devmem %p, size %u\n", dest, size);
     return SM_SUCCESS;
 }

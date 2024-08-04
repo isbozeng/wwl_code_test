@@ -32,10 +32,6 @@ signal.h
 shm_rwlock.h
 /home/isbozeng/Downloads/wwl_code_test/kcm/client/shm_rwlock.h
 
-/home/isbozeng/Downloads/wwl_code_test/kcm/client/shm_rwlock.c
-shm_rwlock.h
-/home/isbozeng/Downloads/wwl_code_test/kcm/client/shm_rwlock.h
-
 /home/isbozeng/Downloads/wwl_code_test/kcm/client/shm_rwlock.h
 pthread.h
 -

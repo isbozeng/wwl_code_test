@@ -42,8 +42,8 @@ void signal_handler(int signum) {
     pthread_rwlock_unlock(&(shm_ptr->rwlock));
     
     if (from_pid != getpid()) {
-        printf("Received signal %d from %u data cnt %u virt addr %p\n", signum, 
-        shm_ptr->last_writer_pid, read_cnt, dev_mem);
+        //printf("Received signal %d from %u data cnt %u virt addr %p\n", signum, 
+        //shm_ptr->last_writer_pid, read_cnt, dev_mem);
 		for (size_t i = 0; i < read_cnt; i++) {
 			pthread_rwlock_rdlock(&(shm_ptr->rwlock));
 			char data = dev_mem[i];
@@ -65,13 +65,14 @@ static void handle_events(int epoll_fd, int device_fd) {
                 uint32_t bytes_read = read(STDIN_FILENO, buffer, sizeof(buffer));
                 if (bytes_read > 0) {
 					shm_rwlock_write(&(shm_ptr->rwlock), dev_mem, buffer, bytes_read, 1, &device_fd);
-					/*if (ioctl(device_fd, IOCTL_NOTIFY) < 0) {
+					if (ioctl(device_fd, IOCTL_NOTIFY) < 0) {
 					   perror("ioctl");
 					   exit(1);
-					}*/  
+					} 
                 }
             }
         }
+        //printf("i %d nfds %d\n", i, nfds);
         if (events[i].events & EPOLLERR || events[i].events & EPOLLHUP) {
             printf("Error or hang up on fd %d\n", events[i].data.fd);
         }
@@ -120,8 +121,6 @@ int main() {
     }
     
     // 映射设备文件
-
-    #ifndef MY_SM_BUF_SIZE
     dev_mem = mmap(NULL, (size_t)getpagesize(), PROT_READ | PROT_WRITE, MAP_SHARED, device_fd, 0);
     if (dev_mem == MAP_FAILED) {
         perror("dev mmap");
@@ -129,8 +128,7 @@ int main() {
         close(epoll_fd);
         return 1;
     }
-    printf("kernel to virt addr %p\n",dev_mem);
-	#endif
+   
 
 
     // 初始化读写锁
@@ -158,7 +156,7 @@ int main() {
         return 1;
     }
 
-
+    printf("mykcm successfully virt addr %p\n",dev_mem);
     // 处理事件
     while (1) {
         handle_events(epoll_fd, device_fd);
