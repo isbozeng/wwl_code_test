@@ -11,7 +11,7 @@
 #include <signal.h>
 
 #include "shm_rwlock.h"
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 512
 
 #define DEVICE_PATH "/dev/mykcm"
 #define IOCTL_NOTIFY _IO('M', 1) 
@@ -21,7 +21,7 @@
 
 
 static shared_memory_t *shm_ptr;
-
+static char *dev_mem = NULL;
 static void write_evt_notify(size_t argc, void *arg) {
 	if (argc > 0) {
 		int32_t *p_fd = arg;
@@ -42,11 +42,11 @@ void signal_handler(int signum) {
     pthread_rwlock_unlock(&(shm_ptr->rwlock));
     
     if (from_pid != getpid()) {
-        printf("Received signal %d from %u kernel module  %u\n", signum, shm_ptr->last_writer_pid, read_cnt);
+        printf("Received signal %d from %u data cnt %u virt addr %p\n", signum, 
+        shm_ptr->last_writer_pid, read_cnt, dev_mem);
 		for (size_t i = 0; i < read_cnt; i++) {
-			//printf("-%p|", &shm_ptr->buf[i]);
 			pthread_rwlock_rdlock(&(shm_ptr->rwlock));
-			char data = shm_ptr->buf[i];
+			char data = dev_mem[i];
 			pthread_rwlock_unlock(&(shm_ptr->rwlock));
 		   	printf("%c", data);
 		}    
@@ -64,11 +64,11 @@ static void handle_events(int epoll_fd, int device_fd) {
                 char buffer[BUFFER_SIZE] = { 0 };
                 uint32_t bytes_read = read(STDIN_FILENO, buffer, sizeof(buffer));
                 if (bytes_read > 0) {
-					shm_rwlock_write(&(shm_ptr->rwlock), buffer, bytes_read, 1, &device_fd);
-					if (ioctl(device_fd, IOCTL_NOTIFY) < 0) {
+					shm_rwlock_write(&(shm_ptr->rwlock), dev_mem, buffer, bytes_read, 1, &device_fd);
+					/*if (ioctl(device_fd, IOCTL_NOTIFY) < 0) {
 					   perror("ioctl");
 					   exit(1);
-					}  
+					}*/  
                 }
             }
         }
@@ -120,15 +120,16 @@ int main() {
     }
     
     // 映射设备文件
-    void *dev_mem = NULL;
+
     #ifndef MY_SM_BUF_SIZE
-    dev_mem = mmap(NULL, BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, device_fd, 0);
+    dev_mem = mmap(NULL, (size_t)getpagesize(), PROT_READ | PROT_WRITE, MAP_SHARED, device_fd, 0);
     if (dev_mem == MAP_FAILED) {
         perror("dev mmap");
         close(device_fd);
         close(epoll_fd);
         return 1;
     }
+    printf("kernel to virt addr %p\n",dev_mem);
 	#endif
 
 
@@ -136,9 +137,7 @@ int main() {
     int ret = shm_rwlock_init(SHM_NAME, BUFFER_SIZE, &shm_ptr, dev_mem, write_evt_notify);
     if (ret == -1) {
         perror("shm_rwlock_init");
-        #ifndef MY_SM_BUF_SIZE
         munmap(dev_mem, BUFFER_SIZE);
-        #endif
         close(device_fd);
         close(epoll_fd);
         return 1;
@@ -152,9 +151,8 @@ int main() {
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, STDIN_FILENO, &stdin_event) < 0) {
         perror("epoll_ctl");
     	shm_rwlock_destroy(SHM_NAME, shm_ptr);
-        #ifndef MY_SM_BUF_SIZE
         munmap(dev_mem, BUFFER_SIZE);
-        #endif
+    
         close(device_fd);
         close(epoll_fd);
         return 1;
@@ -167,9 +165,7 @@ int main() {
     }
 
     // 清理资源
-    #ifndef MY_SM_BUF_SIZE
     munmap(dev_mem, BUFFER_SIZE);
-    #endif
 	shm_rwlock_destroy(SHM_NAME, shm_ptr);
     close(device_fd);
     close(epoll_fd);

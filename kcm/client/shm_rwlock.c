@@ -38,14 +38,8 @@ int shm_rwlock_init(const char *name, size_t size, shared_memory_t **shm_ptr, vo
 
     pthread_rwlockattr_destroy(&attr);
 
-    // 设置共享内存结构体的buf指针
-    #ifndef MY_SM_BUF_SIZE    
-    (*shm_ptr)->buf = buf;
+    // 设置共享内存结构体
     (*shm_ptr)->buf_size = size;
-    #else
-    (*shm_ptr)->buf_size = sizeof((*shm_ptr)->buf);
-    memset((*shm_ptr)->buf, 0, (*shm_ptr)->buf_size);
-    #endif
     (*shm_ptr)->last_writer_pid = -1;
     (*shm_ptr)->last_write_size = 0;
     (*shm_ptr)->write_evt_cb = cb; // 设置回调函数
@@ -74,7 +68,7 @@ int shm_rwlock_destroy(const char *name, shared_memory_t *shm_ptr) {
     return SM_SUCCESS;
 }
 
-int shm_rwlock_read(shared_memory_t *shm_ptr, char *buffer, size_t size) {
+int shm_rwlock_read(shared_memory_t *shm_ptr, void *src, char *buffer, size_t size) {
     if (size > shm_ptr->buf_size) {
         fprintf(stderr, "Read size exceeds buffer size\n");
         return SM_FAILURE;
@@ -86,7 +80,7 @@ int shm_rwlock_read(shared_memory_t *shm_ptr, char *buffer, size_t size) {
         return SM_FAILURE;
     }
 
-    memcpy(buffer, shm_ptr->buf, size);
+    memcpy(buffer, src, size);
 
     // 释放锁
     if (pthread_rwlock_unlock(&(shm_ptr->rwlock)) != 0) {
@@ -97,32 +91,34 @@ int shm_rwlock_read(shared_memory_t *shm_ptr, char *buffer, size_t size) {
     return SM_SUCCESS;
 }
 
-int shm_rwlock_write(shared_memory_t *shm_ptr, const char *buffer, size_t size, size_t cb_argc, void*cb_arg) {
+int shm_rwlock_write(shared_memory_t *shm_ptr, void *dest, const void *buffer, size_t size, size_t cb_argc, void*cb_arg) {
     if (size > shm_ptr->buf_size) {
         fprintf(stderr, "Write size exceeds buffer size\n");
         return SM_FAILURE;
     }
-	//printf("shm_buf start %p, w end %p", shm_ptr->buf, &shm_ptr->buf[size]);
+    //printf("start write devmem %p, size %u\n", dest, size);
     // 获取写锁
     if (pthread_rwlock_wrlock(&(shm_ptr->rwlock)) != 0) {
         perror("pthread_rwlock_wrlock");
         return SM_FAILURE;
     }
 
-    memcpy(shm_ptr->buf, buffer, size);
+    memcpy(dest, buffer, size);
 
     // 更新写进程 PID 和写入大小
     shm_ptr->last_writer_pid = getpid();
     shm_ptr->last_write_size = size;
-    // 调用回调函数（如果已注册）
-    /*if (shm_ptr->write_evt_cb) {
-        shm_ptr->write_evt_cb(cb_argc, cb_arg);
-    }*/
+
     // 释放锁
     if (pthread_rwlock_unlock(&(shm_ptr->rwlock)) != 0) {
         perror("pthread_rwlock_unlock");
         return SM_FAILURE;
     }
-
+    //printf("end write devmem %p, size %u\n", dest, size);
+    // 调用回调函数（如果已注册）
+    if (shm_ptr->write_evt_cb) {
+        shm_ptr->write_evt_cb(cb_argc, cb_arg);
+    }    
+    //printf("evt cb end\n");
     return SM_SUCCESS;
 }

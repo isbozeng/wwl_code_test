@@ -2,6 +2,7 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/mm.h>
+#include <linux/gfp.h>          // alloc_page
 #include <linux/ioctl.h>
 #include <linux/slab.h>
 #include <linux/atomic.h>
@@ -11,14 +12,11 @@
 #include <linux/signal.h>
 #define DEVICE_NAME "mykcm"
 #define IOCTL_NOTIFY _IO('M', 1) // IOCTL 命令，用于通知
-
-
-
+#define PAGE_ORDER 2
+#define MAX_SIZE (PAGE_SIZE << PAGE_ORDER)
+static struct page *page = NULL;
 static int major;
-static char *kernel_buffer;
-static size_t buffer_size = 4096;
-static DECLARE_WAIT_QUEUE_HEAD(wait_queue);
-static struct fasync_struct *async_queue;
+static struct fasync_struct *async_queue = NULL;
 static struct class *device_class = NULL; // 添加设备类的全局变量声明
 static struct device *device = NULL;
 
@@ -30,8 +28,21 @@ static int device_fasync(int fd, struct file *filep, int mode)
 }
 
 static int device_open(struct inode *inode, struct file *file) {
-    
-    return 0;
+   struct mm_struct *mm = current->mm;
+
+   int minor = MINOR(inode->i_rdev);
+
+   printk("%s: major=%d, minor=%d\n", __func__, MAJOR(inode->i_rdev), minor);
+ 
+   printk("client: %s (%d)\n", current->comm, current->pid);
+   printk("code  section: [0x%lx   0x%lx]\n", mm->start_code, mm->end_code);
+   printk("data  section: [0x%lx   0x%lx]\n", mm->start_data, mm->end_data);
+   printk("brk   section: s: 0x%lx, c: 0x%lx\n", mm->start_brk, mm->brk);
+   printk("mmap  section: s: 0x%lx\n", mm->mmap_base);
+   printk("stack section: s: 0x%lx\n", mm->start_stack);
+   printk("arg   section: [0x%lx   0x%lx]\n", mm->arg_start, mm->arg_end);
+   printk("env   section: [0x%lx   0x%lx]\n", mm->env_start, mm->env_end);    
+   return 0;
 }
 
 static int device_release(struct inode *inode, struct file *file) {
@@ -61,28 +72,42 @@ static long device_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 
 static int device_mmap(struct file *file, struct vm_area_struct *vma) {
-    unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
-    size_t size = vma->vm_end - vma->vm_start;
+    unsigned long size;
+    unsigned long pfn_start;
+    void *virt_start;
+    int ret;
 
-    // 检查映射区域是否超出缓冲区大小
-    if (offset + size > buffer_size)
+    pfn_start = page_to_pfn(page) + vma->vm_pgoff;
+    virt_start = page_to_virt(page) + (vma->vm_pgoff << PAGE_SHIFT);
+
+    /* 映射大小不超过实际物理页 */
+    size = min(((1 << PAGE_ORDER) - vma->vm_pgoff) << PAGE_SHIFT,
+               vma->vm_end - vma->vm_start);
+
+    printk("phys_start: 0x%lx, offset: 0x%lx, vma_size: 0x%lx, map size:0x%lx\n",
+           pfn_start << PAGE_SHIFT, vma->vm_pgoff << PAGE_SHIFT,
+           vma->vm_end - vma->vm_start, size);
+
+    if (size <= 0) {
+        printk("%s: offset 0x%lx too large, max size is 0x%lx\n", __func__,
+               vma->vm_pgoff << PAGE_SHIFT, MAX_SIZE);
         return -EINVAL;
-
-    // 获取 kernel_buffer 的物理地址
-    phys_addr_t phys_addr = virt_to_phys(kernel_buffer);
-
-    // 检查 phys_addr 是否有效
-    if (!phys_addr)
-        return -EINVAL;
-
-    // 映射物理内存到用户空间
-    if (remap_pfn_range(vma, vma->vm_start,
-                        phys_addr >> PAGE_SHIFT,
-                        size, vma->vm_page_prot)) {
-        return -EAGAIN; // 映射失败时返回错误代码
     }
 
-    return 0; // 映射成功
+    // 外层vm_mmap_pgoff已经用信号量保护了 
+    // down_read(&mm->mmap_sem);
+    ret = remap_pfn_range(vma, vma->vm_start, pfn_start, size, vma->vm_page_prot);
+    // up_read(&mm->mmap_sem);
+
+    if (ret) {
+        printk("remap_pfn_range failed, vm_start: 0x%lx\n", vma->vm_start);
+    }
+    else {
+        printk("map kernel 0x%px to user 0x%lx, size: 0x%lx\n",
+               virt_start, vma->vm_start, size);
+    }
+
+    return ret;
 }
 
 
@@ -107,18 +132,19 @@ static int __init device_init(void) {
     }
 
     // 分配内核缓冲区
-    kernel_buffer = kmalloc(buffer_size, GFP_KERNEL);
-    if (!kernel_buffer) {
-        printk(KERN_ALERT "Failed to allocate memory for kernel buffer\n");
-        unregister_chrdev(major, DEVICE_NAME); // 释放已注册的设备
+    page = alloc_pages(GFP_KERNEL, PAGE_ORDER);
+    if (!page) {
+        printk("alloc_page failed\n");
         return -ENOMEM;
     }
-    memset(kernel_buffer, 0, buffer_size);
+
+    printk("mykkcm buffer physical address: %lx, virtual address: %px\n",
+           page_to_pfn(page) << PAGE_SHIFT, page_to_virt(page));
 // 创建设备类
     device_class = class_create(THIS_MODULE, DEVICE_NAME);
     if (IS_ERR(device_class)) {
         printk(KERN_ALERT "Failed to create device class\n");
-        kfree(kernel_buffer);
+        __free_pages(page, PAGE_ORDER);
         unregister_chrdev(major, DEVICE_NAME);
         return PTR_ERR(device_class);
     }
@@ -128,7 +154,7 @@ static int __init device_init(void) {
     if (IS_ERR(device)) {
         printk(KERN_ALERT "Failed to create device\n");
         class_destroy(device_class);
-        kfree(kernel_buffer);
+        __free_pages(page, PAGE_ORDER);
         unregister_chrdev(major, DEVICE_NAME);
         return PTR_ERR(device);
     }
@@ -144,10 +170,9 @@ static void __exit device_exit(void) {
     if (device_class) {
         class_destroy(device_class);
     }
-    if (kernel_buffer) {
-        kfree(kernel_buffer);
-        kernel_buffer = NULL; // 防止再次释放
-    }
+    
+	__free_pages(page, PAGE_ORDER);
+    
     if (major >= 0) {
         unregister_chrdev(major, DEVICE_NAME);
     }
