@@ -14,7 +14,7 @@ TEST(MyListTest, StringConstructor) {
     EXPECT_FALSE(list.empty());
     std::ostringstream oss;
     oss << list;
-    EXPECT_EQ(oss.str(), "1 2 3 4 5 ");
+    EXPECT_EQ(oss.str(), "1 2 3 4 5");
 }
 
 TEST(MyListTest, CopyConstructor) {
@@ -24,7 +24,7 @@ TEST(MyListTest, CopyConstructor) {
     EXPECT_FALSE(copy.empty());
     std::ostringstream oss;
     oss << copy;
-    EXPECT_EQ(oss.str(), "1 2 3 ");
+    EXPECT_EQ(oss.str(), "1 2 3");
 }
 
 TEST(MyListTest, MoveConstructor) {
@@ -35,7 +35,7 @@ TEST(MyListTest, MoveConstructor) {
     EXPECT_EQ(moved.size(), 3);
     std::ostringstream oss;
     oss << moved;
-    EXPECT_EQ(oss.str(), "1 2 3 ");
+    EXPECT_EQ(oss.str(), "1 2 3");
 }
 
 // 测试 MyList 的拷贝赋值运算符
@@ -47,7 +47,7 @@ TEST(MyListTest, CopyAssignment) {
     EXPECT_FALSE(list2.empty());
     std::ostringstream oss;
     oss << list2;
-    EXPECT_EQ(oss.str(), "1 2 3 ");
+    EXPECT_EQ(oss.str(), "1 2 3");
 }
 
 // 测试 MyList 的移动赋值运算符
@@ -59,7 +59,7 @@ TEST(MyListTest, MoveAssignment) {
     EXPECT_EQ(list2.size(), 3);
     std::ostringstream oss;
     oss << list2;
-    EXPECT_EQ(oss.str(), "1 2 3 ");
+    EXPECT_EQ(oss.str(), "1 2 3");
 }
 
 // 测试 push_back 和 push_front
@@ -80,13 +80,13 @@ TEST(MyListTest, InsertAndRemove) {
     EXPECT_EQ(list.size(), 4);
     std::ostringstream oss;
     oss << list;
-    EXPECT_EQ(oss.str(), "1 2 3 4 ");
+    EXPECT_EQ(oss.str(), "1 2 3 4");
 
     list.remove(2);
     EXPECT_EQ(list.size(), 3);
     oss.str("");  // 清空ostringstream
     oss << list;
-    EXPECT_EQ(oss.str(), "1 3 4 ");
+    EXPECT_EQ(oss.str(), "1 3 4");
 }
 
 // 测试 pop_front 和 pop_back
@@ -96,13 +96,13 @@ TEST(MyListTest, PopOperations) {
     EXPECT_EQ(list.size(), 3);
     std::ostringstream oss;
     oss << list;
-    EXPECT_EQ(oss.str(), "2 3 4 ");
+    EXPECT_EQ(oss.str(), "2 3 4");
 
     list.pop_back();
     EXPECT_EQ(list.size(), 2);
     oss.str("");  // 清空ostringstream
     oss << list;
-    EXPECT_EQ(oss.str(), "2 3 ");
+    EXPECT_EQ(oss.str(), "2 3");
 }
 
 // 测试 == 操作符
@@ -125,7 +125,27 @@ TEST(MyListTest, PlusOperator) {
     EXPECT_EQ(result.size(), 6);
     std::ostringstream oss;
     oss << result;
-    EXPECT_EQ(oss.str(), "1 2 3 4 5 6 ");
+    EXPECT_EQ(oss.str(), "1 2 3 4 5 6");
+}
+
+// 测试 << 运算符
+TEST(MyListTest, OverwriteList) {
+    MyList my_list;
+    my_list << "6 7 8 9 10";
+    std::stringstream ss;
+    ss << my_list;
+    EXPECT_EQ(ss.str(), "6 7 8 9 10");
+}
+
+//测试 << +运算符
+TEST(MyListTest, ConcatenateLists) {
+    MyList my_list1("1 2 3 4 5");
+    MyList my_list2;
+    my_list2 << "6 7 8 9 10";
+    MyList my_list3 = my_list1 + my_list2;
+    std::stringstream ss;
+    ss << my_list3;
+    EXPECT_EQ(ss.str(), "1 2 3 4 5 6 7 8 9 10");
 }
 
 // 测试 - 运算符
@@ -135,8 +155,9 @@ TEST(MyListTest, MinusOperator) {
     EXPECT_EQ(result.size(), 5);
     std::ostringstream oss;
     oss << result;
-    EXPECT_EQ(oss.str(), "5 4 3 2 1 ");
+    EXPECT_EQ(oss.str(), "5 4 3 2 1");
 }
+
 
 // 测试迭代器
 TEST(MyListTest, Iterator) {

@@ -195,8 +195,11 @@ MyList& MyList::operator<<(const std::string& str) {
 std::ostream& operator<<(std::ostream& os, const MyList& list) {
     ListNode* current = list.head;
     while (current) {
-        os << current->val << " ";
+        os << current->val;
         current = current->next;
+        if (current) {
+           os << " ";
+        }
     }
     return os;
 }
